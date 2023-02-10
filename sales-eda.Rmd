@@ -9,10 +9,14 @@ output: html_document
 knitr::opts_chunk$set(echo = TRUE)
 ```
 
+ data : https://archive.ics.uci.edu/ml/datasets/Online+Retail+II
+
 ```{r load-pkgs}
 library(tidyverse)
 library(readxl)
 library(janitor)
+library(lubridate)
+library(scales)
 ```
 
 ```{r load-data}
@@ -46,4 +50,88 @@ data %>%
   arrange(desc(total_revenue))
 ```
 
+```{r}
+data <- data %>%
+  mutate(
+    revenue = quantity*price,
+    date = ymd(as.Date(invoice_date)),
+    year = year(as.Date(date)),
+    month = month(date)
+    )
+```
 
+```{r}
+data %>%
+  filter(revenue > 0) %>%
+  group_by(date, country) %>%
+  summarize(daily_revenue = sum(revenue)) %>%
+  filter(country == "United Kingdom") %>%
+  ggplot(aes(x = date, y = daily_revenue)) +
+  geom_point() +
+  geom_smooth(se = F) +
+  scale_y_continuous(labels = label_dollar(
+    scale = .001, 
+    suffix = "k",,
+    prefix = "£"
+    )) +
+  labs(
+    x = "Date", 
+    y = "Daily revenue",
+    title = "Daily revenue over time",
+    subtitle = "In the United Kingdom"
+  ) +
+  theme_minimal()
+```
+
+```{r}
+data %>%
+  mutate(date = lubridate::ymd(as.Date(invoice_date)))
+```
+
+```{r}
+data %>%
+  filter(revenue > 0) %>%
+  group_by(month, year, country) %>%
+  summarize(monthly_revenue = sum(revenue)) %>%
+  filter(country == "United Kingdom") %>%
+  ggplot(aes(x = my(paste0(month, "-", year)), y = monthly_revenue)) +
+  geom_line() +
+  geom_point() +
+  scale_y_continuous(labels = label_dollar(
+    scale = .000001, 
+    suffix = "M", 
+    accuracy = .1,
+    prefix = "£"
+    )) +
+  labs(
+    x = "Date", 
+    y = "Monthly revenue",
+    title = "Monthly revenue over time",
+    subtitle = "In the United Kingdom"
+  ) +
+  theme_minimal()
+```
+
+
+```{r}
+data %>%
+  filter(revenue > 0) %>%
+  group_by(date, country) %>%
+  summarize(daily_revenue = sum(revenue)) %>%
+  filter(country == "United Kingdom") %>%
+  ggplot(aes(x = date, y = daily_revenue)) +
+  geom_line() +
+  geom_smooth(se = F) +
+  scale_y_continuous(labels = label_dollar(
+    scale = .001, 
+    suffix = "k",
+    prefix = "£"
+    )) +
+  labs(
+    x = "Date", 
+    y = "Daily revenue",
+    title = "Daily revenue over time",
+    subtitle = "In the United Kingdom"
+  ) +
+  theme_minimal()
+```
