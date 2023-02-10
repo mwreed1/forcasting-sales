@@ -1,0 +1,49 @@
+---
+title: "sales-eda"
+author: "Margaret Reed"
+date: "`r Sys.Date()`"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r load-pkgs}
+library(tidyverse)
+library(readxl)
+library(janitor)
+```
+
+```{r load-data}
+data <- read_excel("online_retail_ii.xlsx")
+```
+
+```{r clean-data}
+data <- data %>%
+  clean_names()
+```
+
+```{r}
+data %>% 
+  count(country) %>%
+  arrange(desc(n))
+```
+
+```{r}
+data %>%
+  count(description) %>%
+  arrange(desc(n))
+```
+
+```{r}
+data %>%
+  group_by(country) %>%
+  summarize(
+    total_quantity = sum(quantity),
+    total_revenue = sum(quantity*price)
+    ) %>%
+  arrange(desc(total_revenue))
+```
+
+
