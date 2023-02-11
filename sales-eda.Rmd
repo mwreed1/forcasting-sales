@@ -17,6 +17,7 @@ library(readxl)
 library(janitor)
 library(lubridate)
 library(scales)
+library(forecast)
 ```
 
 ```{r load-data}
@@ -135,3 +136,26 @@ data %>%
   ) +
   theme_minimal()
 ```
+
+source: https://www.simplilearn.com/tutorials/data-science-tutorial/time-series-forecasting-in-r#:~:text=Time%20series%20forecasting%20is%20the,as%20a%20time%20series%20data.
+
+
+```{r}
+daily_uk <- data %>%
+  filter(country == "United Kingdom") %>%
+  group_by(date) %>%
+  summarize(daily_revenue = sum(revenue))
+mymodel <- auto.arima(daily_uk %>% pull(daily_revenue))
+```
+
+```{r}
+plot.ts(mymodel$residuals)
+```
+
+```{r}
+myforecast <- forecast(mymodel, level=c(70), h=100)
+plot(myforecast)
+```
+
+https://www.pluralsight.com/guides/time-series-forecasting-using-r
+
