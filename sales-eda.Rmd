@@ -57,7 +57,8 @@ data <- data %>%
     revenue = quantity*price,
     date = ymd(as.Date(invoice_date)),
     year = year(as.Date(date)),
-    month = month(date)
+    month = month(date),
+    hour = hour(invoice_date)
     )
 ```
 
@@ -142,7 +143,7 @@ source: https://www.simplilearn.com/tutorials/data-science-tutorial/time-series-
 
 ```{r}
 daily_uk <- data %>%
-  filter(country == "United Kingdom") %>%
+  filter(country == "United Kingdom", revenue > 0) %>%
   group_by(date) %>%
   summarize(daily_revenue = sum(revenue))
 mymodel <- auto.arima(daily_uk %>% pull(daily_revenue))
@@ -153,9 +154,92 @@ plot.ts(mymodel$residuals)
 ```
 
 ```{r}
-myforecast <- forecast(mymodel, level=c(70), h=100)
+mymodel %>% summary()
+```
+
+
+```{r}
+myforecast <- forecast(mymodel, h=50)
 plot(myforecast)
 ```
 
 https://www.pluralsight.com/guides/time-series-forecasting-using-r
 
+```{r}
+hourly_uk <- data %>%
+  filter(country == "United Kingdom", revenue > 0) %>%
+  group_by(date, hour) %>%
+  summarize(hourly_revenue = sum(revenue))
+mymodel <- auto.arima(hourly_uk %>% pull(hourly_revenue))
+```
+
+```{r}
+plot.ts(mymodel$residuals)
+```
+
+```{r}
+myforecast <- forecast(mymodel, h=1000)
+plot(myforecast)
+```
+
+
+
+
+
+
+```{r}
+training <- daily_uk %>%
+  slice(1:276)
+testing <- daily_uk %>%
+  slice(277:307)
+```
+
+```{r}
+daily_model <- auto.arima(training %>% pull(daily_revenue))
+plot.ts(daily_model$residuals)
+daily_forecast <- forecast(daily_model, h=31)
+plot(daily_forecast)
+```
+
+```{r}
+cbind(daily_uk%>%slice(277:307), daily_forecast) %>%
+  ggplot(aes(x = date)) +
+  geom_line(aes(y = daily_revenue), color = "black") +
+  geom_line(aes(y = `Point Forecast`), color = "blue")
+```
+
+```{r}
+training_hourly <- hourly_uk %>% as.data.frame() %>% slice(1:2663)
+testing_hourly <- hourly_uk %>% as.data.frame() %>% slice_tail(n = 296)
+```
+
+```{r}
+hourly_model <- auto.arima(training_hourly %>% pull(hourly_revenue))
+plot.ts(hourly_model$residuals)
+hourly_forecast <- forecast(hourly_model, h=296)
+plot(hourly_forecast)
+```
+
+```{r}
+cbind(testing_hourly, hourly_forecast$mean) %>%
+  group_by(date) %>%
+  summarize(
+    daily_revenue = sum(hourly_revenue), 
+    daily_forecast = sum(`hourly_forecast$mean`)
+    ) %>%
+  ggplot(aes(x = date)) +
+  geom_line(aes(y = daily_revenue), color = "black") +
+  geom_line(aes(y = daily_forecast), color = "blue") +
+  scale_y_continuous(labels = label_dollar(
+    scale = .001, 
+    suffix = "k",,
+    prefix = "£"
+    )) +
+  labs(
+    x = "Date",
+    y = "Revenue (sterling)",
+    title = "Predicted vs actual revenue during last month of data set",
+    subtitle = "Actual (black), predicted (blue)"
+  ) +
+  theme_minimal()
+```
