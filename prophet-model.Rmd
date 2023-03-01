@@ -17,6 +17,7 @@ library(janitor)
 library(lubridate)
 library(scales)
 library(MLmetrics)
+library(timeDate)
 ```
 
 
@@ -74,8 +75,30 @@ testing <- p_data %>% slice_tail(n=z)
 
 
 ```{r}
-m <- prophet(training)
+uk_holidays <- tibble(ds = holidayLONDON(year = 2009:2011) %>%
+  as.Date(),
+  holiday = "holiday")
 ```
+
+
+# https://facebook.github.io/prophet/docs/quick_start.html#r-api
+
+```{r}
+m <- prophet(
+  training, 
+  holidays = uk_holidays, 
+  seasonality.mode = "additive", 
+  seasonality.prior.scale	= 0.000001,
+  changepoint.prior.scale = 0.025,
+  weekly.seasonality = 10,
+  yearly.seasonality = F,
+  daily.seasonality = 10,
+  changepoint.range = 0.8,
+  n.changepoints = 30
+  )
+```
+
+
 ```{r}
 future <- make_future_dataframe(m, periods = 60, freq = "day")
 ```
@@ -83,11 +106,7 @@ future <- make_future_dataframe(m, periods = 60, freq = "day")
 
 ```{r}
 forecast <- predict(m, future)
-tail(forecast[c('ds', 'yhat', 'yhat_lower', 'yhat_upper')])
-```
-
-```{r}
-prophet_plot_components(m, forecast)
+#tail(forecast[c('ds', 'yhat', 'yhat_lower', 'yhat_upper')])
 ```
 
 
@@ -101,4 +120,22 @@ true <- testing %>%
 MAPE(pred, true)
 ```
 
+```{r}
+cbind(testing, pred) %>%
+  ggplot(aes(x = ds)) +
+  geom_line(aes(y = y), color = "black") +
+  geom_line(aes(y = pred), color = "blue") +
+  scale_y_continuous(labels = label_dollar(
+    scale = .001, 
+    suffix = "k",
+    prefix = "£"
+    )) +
+  labs(
+    x = "Date",
+    y = "Revenue (sterling)",
+    title = "Predicted vs actual revenue during last two months of data",
+    subtitle = "Actual (black), predicted (blue)"
+  ) +
+  theme_minimal()
+```
 
