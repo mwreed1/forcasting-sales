@@ -1,0 +1,201 @@
+---
+title: "Sales Modeling"
+author: "Margaret Reed"
+date: "`r Sys.Date()`"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r load-pkgs}
+library(tidyverse)
+library(readxl)
+library(janitor)
+library(lubridate)
+library(scales)
+library(forecast)
+library(tscount)
+```
+
+```{r load-data}
+data <- read_excel("online_retail_ii.xlsx")
+```
+
+```{r clean-data}
+data <- data %>%
+  clean_names()
+
+data <- data %>%
+  mutate(
+    revenue = quantity*price,
+    date = ymd(as.Date(invoice_date)),
+    year = year(as.Date(date)),
+    month = month(date),
+    hour = hour(invoice_date)
+    )
+```
+
+```{r}
+daily_uk <- data %>%
+  filter(country == "United Kingdom", revenue > 0) %>%
+  group_by(date) %>%
+  summarize(daily_revenue = sum(revenue))
+daily_uk <- daily_uk %>%
+  expand(date = seq(ymd("2009-12-1"), ymd("2010-12-9"), by = "1 day")) %>%
+  left_join(
+    daily_uk,
+    by = c("date" = "date")
+  ) %>%
+  replace_na(list(daily_revenue = 0))
+```
+
+https://www.pluralsight.com/guides/time-series-forecasting-using-r
+
+```{r}
+hourly_uk <- data %>%
+  filter(country == "United Kingdom", revenue > 0) %>%
+  group_by(date, hour) %>%
+  summarize(hourly_revenue = sum(revenue), .groups = "drop")
+
+hourly_uk <- hourly_uk %>%
+  expand(date = seq(ymd("2009-12-1"), ymd("2010-12-9"), by = "1 day"), hour = 7:20) %>%
+  left_join(
+    hourly_uk,
+    by = c("date" = "date", "hour" = "hour")
+  ) %>%
+  replace_na(list(hourly_revenue = 0))
+```
+
+
+```{r}
+x <- dim(daily_uk)[1]
+y <- round(x*0.9, 0)
+z <- x - y
+training <- daily_uk %>% slice(1:y)
+testing <- daily_uk %>% slice_tail(n=z)
+```
+
+```{r}
+daily_model <- auto.arima(training %>% pull(daily_revenue), stepwise = F)
+plot.ts(daily_model$residuals)
+daily_forecast <- forecast(daily_model, h=z)
+plot(daily_forecast)
+```
+
+```{r}
+cbind(testing, daily_forecast) %>%
+  ggplot(aes(x = date)) +
+  geom_line(aes(y = daily_revenue), color = "black") +
+  geom_line(aes(y = `Point Forecast`), color = "blue") +
+  scale_y_continuous(labels = label_dollar(
+    scale = .001, 
+    suffix = "k",
+    prefix = "£"
+    )) +
+  labs(
+    x = "Date",
+    y = "Revenue (sterling)",
+    title = "Predicted vs actual revenue during last month of data set",
+    subtitle = "Actual (black), predicted (blue)"
+  ) +
+  theme_minimal()
+```
+
+```{r}
+summary(daily_model)
+```
+
+
+```{r}
+a <- dim(hourly_uk)[1]
+b <- round(a*0.9, 0)
+c <- a - b
+training_hourly <- hourly_uk %>% as.data.frame() %>% slice(1:b)
+testing_hourly <- hourly_uk %>% as.data.frame() %>% slice_tail(n = c)
+```
+
+```{r}
+hourly_model <- auto.arima(training_hourly %>% pull(hourly_revenue))
+plot.ts(hourly_model$residuals)
+hourly_forecast <- forecast(hourly_model, h=c)
+plot(hourly_forecast)
+```
+
+```{r}
+cbind(testing_hourly, hourly_forecast$mean) %>%
+  group_by(date) %>%
+  summarize(
+    daily_revenue = sum(hourly_revenue), 
+    daily_forecast = sum(`hourly_forecast$mean`)
+    ) %>%
+  ggplot(aes(x = date)) +
+  geom_line(aes(y = daily_revenue), color = "black") +
+  geom_line(aes(y = daily_forecast), color = "blue") +
+  scale_y_continuous(labels = label_dollar(
+    scale = .001, 
+    suffix = "k",
+    prefix = "£"
+    )) +
+  labs(
+    x = "Date",
+    y = "Revenue (sterling)",
+    title = "Predicted vs actual revenue during last month of data set",
+    subtitle = "Actual (black), predicted (blue)"
+  ) +
+  theme_minimal()
+```
+
+```{r}
+summary(hourly_model)
+```
+
+
+```{r}
+half_day_uk <- hourly_uk %>%
+  mutate(
+    day_half = ifelse(hour <= 13, 1, 2)
+  ) %>%
+  group_by(date, day_half) %>%
+  summarize(half_day_revenue = sum(hourly_revenue), .groups = "drop")
+
+d <- dim(half_day_uk)[1]
+e <- round(d*0.9, 0)
+f <- d - e
+half_day_training <- half_day_uk %>% slice(1:e)
+half_day_testing <- half_day_uk %>% slice_tail(n=f)
+```
+
+```{r}
+half_day_model <- auto.arima(half_day_training %>% pull(half_day_revenue), stepwise = F)
+half_day_forecast <- forecast(half_day_model, h=f)
+```
+
+```{r}
+cbind(half_day_testing, half_day_forecast$mean) %>%
+  group_by(date) %>%
+  summarize(
+    daily_revenue = sum(half_day_revenue), 
+    daily_forecast = sum(`half_day_forecast$mean`)
+    ) %>%
+  ggplot(aes(x = date)) +
+  geom_line(aes(y = daily_revenue), color = "black") +
+  geom_line(aes(y = daily_forecast), color = "blue") +
+  scale_y_continuous(labels = label_dollar(
+    scale = .001, 
+    suffix = "k",
+    prefix = "£"
+    )) +
+  labs(
+    x = "Date",
+    y = "Revenue (sterling)",
+    title = "Predicted vs actual revenue during last month of data set",
+    subtitle = "Actual (black), predicted (blue)"
+  ) +
+  theme_minimal()
+```
+```{r}
+summary(half_day_model)
+```
+
