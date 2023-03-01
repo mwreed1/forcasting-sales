@@ -117,7 +117,9 @@ pred <- forecast %>%
 true <- testing %>%
   pull(y)
 
-MAPE(pred, true)
+MAPE(pred[1:20], true[1:20])
+MAPE(pred[21:40], true[21:40])
+MAPE(pred[41:60], true[41:60])
 ```
 
 ```{r}

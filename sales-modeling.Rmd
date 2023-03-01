@@ -20,11 +20,13 @@ library(tscount)
 ```
 
 ```{r load-data}
-data <- read_excel("online_retail_ii.xlsx")
+data1 <- read_excel("online_retail_ii.xlsx", sheet = 1)
+data2 <- read_excel("online_retail_ii.xlsx", sheet = 2)
 ```
 
 ```{r clean-data}
-data <- data %>%
+data <- data1 %>%
+  rbind(data2) %>%
   clean_names()
 
 data <- data %>%
@@ -43,7 +45,7 @@ daily_uk <- data %>%
   group_by(date) %>%
   summarize(daily_revenue = sum(revenue))
 daily_uk <- daily_uk %>%
-  expand(date = seq(ymd("2009-12-1"), ymd("2010-12-9"), by = "1 day")) %>%
+  expand(date = seq(ymd("2009-12-1"), ymd("2011-12-9"), by = "1 day")) %>%
   left_join(
     daily_uk,
     by = c("date" = "date")
@@ -106,6 +108,25 @@ cbind(testing, daily_forecast) %>%
 ```{r}
 summary(daily_model)
 ```
+
+```{r}
+pred_df <- cbind(testing, daily_forecast)
+
+MAPE(
+  pred_df %>%
+  clean_names() %>%
+    pull(point_forecast),
+  pred_df %>%
+    pull(daily_revenue)
+)
+
+pred_df %>%
+  clean_names() %>%
+    pull(daily_revenue) %>%
+  summary()
+```
+
+
 
 
 ```{r}
