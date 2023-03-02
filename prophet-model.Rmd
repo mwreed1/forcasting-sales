@@ -85,29 +85,7 @@ uk_holidays <- tibble(ds = holidayLONDON(year = 2009:2011) %>%
 # https://facebook.github.io/prophet/docs/quick_start.html#r-api
 
 ```{r}
-m <- prophet(
-  training, 
-  holidays = uk_holidays, 
-  seasonality.mode = "additive", 
-  seasonality.prior.scale	= 0.001,
-  changepoint.prior.scale = 0.05,
-  weekly.seasonality = 50,
-  yearly.seasonality = 4,
-  daily.seasonality = 30,
-  changepoint.range = 0.7,
-  n.changepoints = 20
-  )
-```
-
-
-```{r}
-future <- make_future_dataframe(m, periods = z, freq = "day")
-```
-
-
-```{r}
-forecast <- predict(m, future)
-#tail(forecast[c('ds', 'yhat', 'yhat_lower', 'yhat_upper')])
+forecast <- make_model("United Kingdom")
 ```
 
 
@@ -132,7 +110,7 @@ true_test <- testing %>%
 
 MAPE(pred_test[1:40], true_test[1:40])
 MAPE(pred_test[41:80], true_test[41:80])
-MAPE(pred_test[81:120], true_test[41:120])
+MAPE(pred_test[81:120], true_test[81:120])
 
 
 full_join(p_data, forecast) %>%
@@ -170,7 +148,46 @@ data %>%
 
 
 ```{r}
-ggplot() +
-  geom_line(data = training, aes(x = ds, y = y))
+mut_data <- p_data %>%
+  mutate(
+    days_since = interval(ymd("2009-12-01"), ymd(ds)) %/% days(1)
+  )
+
+model <- lm(y ~ days_since + days_since**2 + days_since**3 + days_since**4, data = mut_data)
+
+summary(model)
 ```
+
+
+```{r}
+pred_test <- forecast %>%
+  slice_tail(n=(2*z/3)) %>%
+  pull(yhat)
+
+true_test <- testing %>%
+  pull(y)
+
+MAPE(pred_test[1:40], true_test[1:40])
+MAPE(pred_test[41:80], true_test[41:80])
+MAPE(pred_test[81:120], true_test[81:120])
+```
+
+
+```{r}
+s <- round(2*z/9, 0)
+tibble(
+ first = map2_dbl(pred_test[1:s], true_test[1:s], MAPE),
+ second = map2_dbl(pred_test[(s+1):(2*s)], true_test[(s+1):(2*s)], MAPE),
+third = map2_dbl(pred_test[(2*s+1):(3*s)], true_test[(2*s+1):(3*s)], MAPE)
+) %>%
+  pivot_longer(
+    cols = everything(),
+    names_to = "segment",
+    values_to = "error"
+  ) %>%
+  ggplot(aes(x = error, y = segment)) +
+  geom_boxplot()
+```
+
+
 
