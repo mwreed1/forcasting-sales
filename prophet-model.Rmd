@@ -60,17 +60,18 @@ hourly_uk <- data %>%
 
 ```{r}
 p_data <- daily_uk %>%
+  filter(daily_revenue < 150000) %>%
   select(date, daily_revenue) %>%
   rename(ds = date, y = daily_revenue)
 
 
 x <- dim(p_data)[1]
-y <- round(x*0.9, 0)
+y <- round(x*0.7, 0)
 z <- x - y
 
-training <- p_data %>% slice(1:544)
-# validation <- p_data %>% slice(y+1:y+round(z/2, 0))
-testing <- p_data %>% slice_tail(n=z)
+training <- p_data %>% slice_head(n=y)
+validation <- p_data %>% anti_join(training) %>% slice_head(n=z/3)
+testing <- p_data %>% anti_join(training) %>% slice_tail(n=(2*z/3))
 ```
 
 
@@ -88,19 +89,19 @@ m <- prophet(
   training, 
   holidays = uk_holidays, 
   seasonality.mode = "additive", 
-  seasonality.prior.scale	= 0.000001,
-  changepoint.prior.scale = 0.025,
-  weekly.seasonality = 10,
-  yearly.seasonality = F,
-  daily.seasonality = 10,
-  changepoint.range = 0.8,
-  n.changepoints = 30
+  seasonality.prior.scale	= 0.001,
+  changepoint.prior.scale = 0.05,
+  weekly.seasonality = 50,
+  yearly.seasonality = 4,
+  daily.seasonality = 30,
+  changepoint.range = 0.7,
+  n.changepoints = 20
   )
 ```
 
 
 ```{r}
-future <- make_future_dataframe(m, periods = 60, freq = "day")
+future <- make_future_dataframe(m, periods = z, freq = "day")
 ```
 
 
@@ -111,22 +112,33 @@ forecast <- predict(m, future)
 
 
 ```{r}
-pred <- forecast %>%
+pred_val <- forecast %>%
   slice_tail(n=z) %>%
+  slice_head(n = z/3) %>%
   pull(yhat)
-true <- testing %>%
+true_val <- validation %>%
   pull(y)
 
-MAPE(pred[1:20], true[1:20])
-MAPE(pred[21:40], true[21:40])
-MAPE(pred[41:60], true[41:60])
+MAPE(pred_val, true_val)
 ```
 
 ```{r}
-cbind(testing, pred) %>%
-  ggplot(aes(x = ds)) +
-  geom_line(aes(y = y), color = "black") +
-  geom_line(aes(y = pred), color = "blue") +
+pred_test <- forecast %>%
+  slice_tail(n=(2*z/3)) %>%
+  pull(yhat)
+
+true_test <- testing %>%
+  pull(y)
+
+MAPE(pred_test[1:40], true_test[1:40])
+MAPE(pred_test[41:80], true_test[41:80])
+MAPE(pred_test[81:120], true_test[41:120])
+
+
+full_join(p_data, forecast) %>%
+  ggplot() +
+  geom_line(aes(x = ymd(ds), y = y), color = "black") +
+  geom_line(aes(x = ymd(ds), y = yhat), color = "blue") +
   scale_y_continuous(labels = label_dollar(
     scale = .001, 
     suffix = "k",
@@ -138,6 +150,27 @@ cbind(testing, pred) %>%
     title = "Predicted vs actual revenue during last two months of data",
     subtitle = "Actual (black), predicted (blue)"
   ) +
-  theme_minimal()
+  theme_minimal() +
+  geom_line(data = training, aes(x = ymd(ds), y = y), color = "grey")
+```
+
+```{r}
+p_data %>%
+  ggplot(aes(x = y)) +
+  geom_boxplot()
+```
+
+```{r}
+data %>%
+  group_by(date, country) %>%
+  summarize(daily_revenue = sum(revenue), .groups = "drop") %>%
+  count(country) %>%
+  arrange(desc(n))
+```
+
+
+```{r}
+ggplot() +
+  geom_line(data = training, aes(x = ds, y = y))
 ```
 
