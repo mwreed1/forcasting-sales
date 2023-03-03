@@ -63,7 +63,7 @@ make_model <- function(country_name){
   
   forecast <- predict(m, future)
   
-  return(forecast)
+  return(list(forecast, testing, p_data))
 }
 
 
